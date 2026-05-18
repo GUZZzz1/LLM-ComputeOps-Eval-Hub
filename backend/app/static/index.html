@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM ComputeOps & Eval Hub</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #607080;
+      --line: #d9e0e7;
+      --accent: #146c94;
+      --accent-dark: #0f526f;
+      --danger: #b42318;
+      --success: #207a43;
+      --code: #eef3f7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 18px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .topbar a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .topbar nav {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 22px auto 36px;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: var(--text);
+      background: #fff;
+      font: inherit;
+      min-height: 38px;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      padding: 9px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+    }
+
+    button.secondary {
+      color: var(--accent);
+      background: #e8f4f8;
+    }
+
+    button.secondary:hover {
+      background: #d9edf4;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .status {
+      min-height: 24px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      word-break: break-word;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.success {
+      color: var(--success);
+    }
+
+    .token {
+      padding: 10px;
+      background: var(--code);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .result {
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 360px;
+      background: #101820;
+      color: #e8f0f6;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 9px 8px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      background: #f9fbfc;
+    }
+
+    .nowrap {
+      white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <h1>LLM ComputeOps & Eval Hub</h1>
+      <nav>
+        <a href="/docs" target="_blank" rel="noreferrer">Project Docs</a>
+        <a href="/api/docs" target="_blank" rel="noreferrer">API Docs</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="stack">
+      <section>
+        <h2>账户</h2>
+        <label>
+          用户名
+          <input id="username" value="demo" autocomplete="username">
+        </label>
+        <label>
+          密码
+          <input id="password" value="123456" type="password" autocomplete="current-password">
+        </label>
+        <div class="actions">
+          <button id="registerBtn">注册</button>
+          <button id="loginBtn" class="secondary">登录</button>
+        </div>
+        <div id="authStatus" class="status"></div>
+      </section>
+
+      <section>
+        <h2>API Key</h2>
+        <label>
+          Key 名称
+          <input id="keyName" value="local-test-key">
+        </label>
+        <div class="actions">
+          <button id="createKeyBtn">生成 API Key</button>
+        </div>
+        <div id="keyStatus" class="status"></div>
+        <div id="apiKeyBox" class="token"></div>
+      </section>
+
+      <section>
+        <h2>当前状态</h2>
+        <label>
+          Access Token
+          <textarea id="accessToken" spellcheck="false"></textarea>
+        </label>
+        <label>
+          API Key
+          <textarea id="apiKey" spellcheck="false"></textarea>
+        </label>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section>
+        <h2>模型与聊天</h2>
+        <div class="actions">
+          <button id="loadModelsBtn" class="secondary">加载模型</button>
+        </div>
+        <div class="grid">
+          <label>
+            模型
+            <select id="model">
+              <option value="qwen2.5:1.5b">qwen2.5:1.5b</option>
+            </select>
+          </label>
+          <label>
+            Max Tokens
+            <input id="maxTokens" type="number" value="128" min="1" max="4096">
+          </label>
+        </div>
+        <label>
+          Temperature
+          <input id="temperature" type="number" value="0.2" min="0" max="2" step="0.1">
+        </label>
+        <label>
+          用户消息
+          <textarea id="prompt">用一句话解释什么是 TTFT</textarea>
+        </label>
+        <div class="actions">
+          <button id="chatBtn">发送到 /v1/chat/completions</button>
+        </div>
+        <div id="chatStatus" class="status"></div>
+        <div id="chatResult" class="result"></div>
+      </section>
+
+      <section>
+        <h2>请求日志</h2>
+        <div class="actions">
+          <button id="loadLogsBtn" class="secondary">刷新日志</button>
+        </div>
+        <div id="logsStatus" class="status"></div>
+        <div style="overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Request ID</th>
+                <th>Status</th>
+                <th>Model</th>
+                <th>Latency</th>
+                <th>Prompt</th>
+                <th>Output</th>
+              </tr>
+            </thead>
+            <tbody id="logsBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      accessToken: "",
+      apiKey: ""
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(id, message, type = "") {
+      const el = $(id);
+      el.textContent = message;
+      el.className = `status ${type}`.trim();
+    }
+
+    function syncTokens() {
+      state.accessToken = $("accessToken").value.trim();
+      state.apiKey = $("apiKey").value.trim();
+    }
+
+    async function request(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        }
+      });
+      const text = await response.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (_) {
+        body = text;
+      }
+      if (!response.ok) {
+        const detail = body && (body.detail || body.error?.message);
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      return body;
+    }
+
+    $("registerBtn").addEventListener("click", async () => {
+      try {
+        const body = await request("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            username: $("username").value.trim(),
+            password: $("password").value
+          })
+        });
+        setStatus("authStatus", `注册成功: ${body.user_id}`, "success");
+      } catch (err) {
+        setStatus("authStatus", err.message, "error");
+      }
+    });
+
+    $("loginBtn").addEventListener("click", async () => {
+      try {
+        const body = await request("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            username: $("username").value.trim(),
+            password: $("password").value
+          })
+        });
+        state.accessToken = body.access_token;
+        $("accessToken").value = body.access_token;
+        setStatus("authStatus", `登录成功: ${body.user_id}`, "success");
+      } catch (err) {
+        setStatus("authStatus", err.message, "error");
+      }
+    });
+
+    $("createKeyBtn").addEventListener("click", async () => {
+      syncTokens();
+      try {
+        const body = await request("/api/api-keys", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${state.accessToken}` },
+          body: JSON.stringify({ name: $("keyName").value.trim() || null })
+        });
+        state.apiKey = body.api_key;
+        $("apiKey").value = body.api_key;
+        $("apiKeyBox").textContent = body.api_key;
+        setStatus("keyStatus", `创建成功，prefix: ${body.api_key_prefix}`, "success");
+      } catch (err) {
+        setStatus("keyStatus", err.message, "error");
+      }
+    });
+
+    $("loadModelsBtn").addEventListener("click", async () => {
+      syncTokens();
+      const token = state.accessToken || state.apiKey;
+      try {
+        const body = await request("/api/models", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const modelSelect = $("model");
+        modelSelect.innerHTML = "";
+        body.models.forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.model;
+          option.textContent = `${item.model} (${item.provider})`;
+          modelSelect.appendChild(option);
+        });
+        setStatus("chatStatus", `加载模型成功: ${body.models.length}`, "success");
+      } catch (err) {
+        setStatus("chatStatus", err.message, "error");
+      }
+    });
+
+    $("chatBtn").addEventListener("click", async () => {
+      syncTokens();
+      $("chatResult").textContent = "";
+      setStatus("chatStatus", "请求中...");
+      try {
+        const body = await request("/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${state.apiKey}` },
+          body: JSON.stringify({
+            model: $("model").value,
+            messages: [{ role: "user", content: $("prompt").value }],
+            temperature: Number($("temperature").value),
+            max_tokens: Number($("maxTokens").value),
+            stream: false,
+            metadata: { source: "web_ui", prompt_version: "v1" }
+          })
+        });
+        $("chatResult").textContent = JSON.stringify(body, null, 2);
+        setStatus("chatStatus", `成功: ${body.request_id}`, "success");
+      } catch (err) {
+        setStatus("chatStatus", err.message, "error");
+      }
+    });
+
+    $("loadLogsBtn").addEventListener("click", async () => {
+      syncTokens();
+      try {
+        const body = await request("/api/requests?limit=20", {
+          headers: { Authorization: `Bearer ${state.accessToken}` }
+        });
+        const tbody = $("logsBody");
+        tbody.innerHTML = "";
+        body.requests.forEach((item) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="nowrap">${item.request_id}</td>
+            <td>${item.status}</td>
+            <td>${item.model}</td>
+            <td>${item.e2e_latency_ms === null ? "" : Math.round(item.e2e_latency_ms) + " ms"}</td>
+            <td>${escapeHtml(item.prompt_preview || "")}</td>
+            <td>${escapeHtml(item.output_preview || item.error_type || "")}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+        setStatus("logsStatus", `已加载 ${body.requests.length} 条日志`, "success");
+      } catch (err) {
+        setStatus("logsStatus", err.message, "error");
+      }
+    });
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
+</body>
+</html>
