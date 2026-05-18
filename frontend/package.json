@@ -1,0 +1,22 @@
+{
+  "name": "llm-computeops-eval-hub-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.3",
+    "vite": "^7.2.7",
+    "vue": "^3.5.26"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.1.8",
+    "vitest": "^4.0.16"
+  }
+}
