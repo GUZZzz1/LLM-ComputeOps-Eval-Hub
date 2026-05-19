@@ -176,6 +176,75 @@
             </table>
           </div>
         </section>
+
+        <section>
+          <div class="section-head">
+            <h2>批量评测</h2>
+            <button class="secondary" :disabled="busy.evalRuns" @click="loadEvalRuns">
+              刷新 Eval Runs
+            </button>
+          </div>
+          <StatusLine :status="status.eval" />
+          <div class="grid">
+            <label>
+              Case File
+              <input v-model.trim="evalCaseFile">
+            </label>
+            <label>
+              Model
+              <select v-model="selectedModel">
+                <option v-for="item in models" :key="item.model" :value="item.model">
+                  {{ item.model }} ({{ item.provider }})
+                </option>
+              </select>
+            </label>
+          </div>
+          <div class="grid">
+            <label>
+              Concurrency
+              <input v-model.number="evalConcurrency" type="number" min="1" max="32">
+            </label>
+            <label>
+              Timeout ms
+              <input v-model.number="evalTimeoutMs" type="number" min="1">
+            </label>
+          </div>
+          <label>
+            Retry Count
+            <input v-model.number="evalRetryCount" type="number" min="0" max="10">
+          </label>
+          <div class="actions">
+            <button :disabled="busy.eval" @click="runEval">运行 Eval</button>
+          </div>
+          <pre class="result">{{ evalResult }}</pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run ID</th>
+                  <th>Status</th>
+                  <th>Model</th>
+                  <th>Total</th>
+                  <th>Pass</th>
+                  <th>Fail</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in evalRuns" :key="item.run_id">
+                  <td class="nowrap">{{ item.run_id }}</td>
+                  <td>{{ item.status }}</td>
+                  <td>{{ item.model }}</td>
+                  <td>{{ item.total_cases }}</td>
+                  <td>{{ item.eval_pass_count }}</td>
+                  <td>{{ item.eval_fail_count }}</td>
+                </tr>
+                <tr v-if="evalRuns.length === 0">
+                  <td colspan="6" class="empty">暂无 Eval Run</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
   </div>
@@ -216,6 +285,15 @@ type RequestLog = {
   created_at: string;
 };
 
+type EvalRun = {
+  run_id: string;
+  status: string;
+  model: string;
+  total_cases: number;
+  eval_pass_count: number;
+  eval_fail_count: number;
+};
+
 const username = ref("demo");
 const password = ref("123456");
 const passwordVisible = ref(false);
@@ -236,13 +314,21 @@ const maxTokens = ref(128);
 const prompt = ref("用一句话解释什么是 TTFT");
 const chatResult = ref("");
 const logs = ref<RequestLog[]>([]);
+const evalCaseFile = ref("eval_cases/smoke_cases.jsonl");
+const evalConcurrency = ref(2);
+const evalTimeoutMs = ref(60000);
+const evalRetryCount = ref(1);
+const evalResult = ref("");
+const evalRuns = ref<EvalRun[]>([]);
 
 const busy = reactive({
   auth: false,
   key: false,
   models: false,
   chat: false,
-  logs: false
+  logs: false,
+  eval: false,
+  evalRuns: false
 });
 
 const status = reactive<Record<string, StatusState>>({
@@ -250,7 +336,9 @@ const status = reactive<Record<string, StatusState>>({
   key: idle(),
   models: idle(),
   chat: idle(),
-  logs: idle()
+  logs: idle(),
+  eval: idle(),
+  evalRuns: idle()
 });
 
 const authHeader = computed(() => ({ Authorization: `Bearer ${accessToken.value}` }));
@@ -343,6 +431,40 @@ async function loadLogs() {
     });
     logs.value = body.requests;
     status.logs = ok(`已加载 ${body.requests.length} 条日志`);
+  });
+}
+
+async function runEval() {
+  await run("eval", async () => {
+    requireValue(accessToken.value, "请先登录，再运行 Eval");
+    evalResult.value = "";
+    const body = await apiRequest<unknown>("/api/eval/runs", {
+      method: "POST",
+      headers: authHeader.value,
+      body: JSON.stringify({
+        name: "web-smoke-eval",
+        model: selectedModel.value,
+        case_file: evalCaseFile.value,
+        concurrency: evalConcurrency.value,
+        timeout_ms: evalTimeoutMs.value,
+        retry_count: evalRetryCount.value
+      })
+    });
+    evalResult.value = JSON.stringify(body, null, 2);
+    const record = body as { run_id?: string };
+    status.eval = ok(`完成: ${record.run_id || "eval run"}`);
+    await loadEvalRuns();
+  });
+}
+
+async function loadEvalRuns() {
+  await run("evalRuns", async () => {
+    requireValue(accessToken.value, "请先登录，再查看 Eval Runs");
+    const body = await apiRequest<{ runs: EvalRun[] }>("/api/eval/runs", {
+      headers: authHeader.value
+    });
+    evalRuns.value = body.runs;
+    status.eval = ok(`已加载 ${body.runs.length} 个 Eval Run`);
   });
 }
 

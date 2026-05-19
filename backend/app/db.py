@@ -82,6 +82,74 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS eval_runs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                name TEXT,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                case_file TEXT,
+                concurrency INTEGER NOT NULL,
+                timeout_ms INTEGER NOT NULL,
+                retry_count INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                total_cases INTEGER DEFAULT 0,
+                success_count INTEGER DEFAULT 0,
+                failed_count INTEGER DEFAULT 0,
+                timeout_count INTEGER DEFAULT 0,
+                eval_pass_count INTEGER DEFAULT 0,
+                eval_fail_count INTEGER DEFAULT 0,
+                started_at TEXT,
+                finished_at TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS eval_tasks (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                category TEXT,
+                prompt TEXT NOT NULL,
+                expected_json TEXT,
+                status TEXT NOT NULL,
+                request_log_id TEXT,
+                retry_times INTEGER DEFAULT 0,
+                output_text TEXT,
+                error_type TEXT,
+                error_message TEXT,
+                e2e_latency_ms REAL,
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                total_tokens INTEGER,
+                tokens_per_second REAL,
+                started_at TEXT,
+                finished_at TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS eval_results (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                evaluator_name TEXT NOT NULL,
+                passed INTEGER NOT NULL,
+                score REAL,
+                reason TEXT,
+                expected_json TEXT,
+                actual_text TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             INSERT INTO models (
                 id, provider, model_name, display_name, is_active, created_at
             )

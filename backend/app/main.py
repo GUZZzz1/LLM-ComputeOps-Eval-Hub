@@ -21,11 +21,14 @@ from backend.app.auth import (
     verify_password,
 )
 from backend.app.db import get_connection
+from backend.app.eval_runner.runner import EvalRunner
 from backend.app.providers.ollama import OllamaProvider
 from backend.app.schemas import (
     ChatCompletionRequest,
     CreateApiKeyRequest,
     CreateApiKeyResponse,
+    CreateEvalRunRequest,
+    EvalRunResponse,
     LoginRequest,
     LoginResponse,
     RegisterRequest,
@@ -276,6 +279,7 @@ async def chat_completions(
         temperature=payload.temperature,
         max_tokens=payload.max_tokens,
     )
+    _normalize_provider_metrics(result)
 
     if result.error_type:
         create_request_log(
@@ -403,6 +407,97 @@ def get_request_detail(
     return dict(row)
 
 
+@app.post("/api/eval/runs", response_model=EvalRunResponse)
+async def create_eval_run(
+    payload: CreateEvalRunRequest,
+    current_user: dict = Depends(get_current_user),
+) -> EvalRunResponse:
+    try:
+        result = await EvalRunner().run(
+            user_id=current_user["id"],
+            name=payload.name,
+            model=payload.model,
+            case_file=payload.case_file,
+            concurrency=payload.concurrency,
+            timeout_ms=payload.timeout_ms,
+            retry_count=payload.retry_count,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return EvalRunResponse(run_id=result["run_id"], status=result["status"])
+
+
+@app.get("/api/eval/runs")
+def list_eval_runs(current_user: dict = Depends(get_current_user)) -> dict:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id AS run_id, name, provider, model, case_file, concurrency,
+                timeout_ms, retry_count, status, total_cases, success_count,
+                failed_count, timeout_count, eval_pass_count, eval_fail_count,
+                started_at, finished_at, created_at
+            FROM eval_runs
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            """,
+            (current_user["id"],),
+        ).fetchall()
+    return {"runs": [dict(row) for row in rows]}
+
+
+@app.get("/api/eval/runs/{run_id}")
+def get_eval_run(
+    run_id: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    return _get_eval_run_for_user(run_id, current_user["id"])
+
+
+@app.get("/api/eval/runs/{run_id}/tasks")
+def list_eval_tasks(
+    run_id: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    _get_eval_run_for_user(run_id, current_user["id"])
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id AS task_id, run_id, case_id, category, prompt, expected_json,
+                status, request_log_id, retry_times, output_text, error_type,
+                error_message, e2e_latency_ms, input_tokens, output_tokens,
+                total_tokens, tokens_per_second, started_at, finished_at, created_at
+            FROM eval_tasks
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    return {"tasks": [dict(row) for row in rows]}
+
+
+@app.get("/api/eval/runs/{run_id}/results")
+def list_eval_results(
+    run_id: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    _get_eval_run_for_user(run_id, current_user["id"])
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id AS result_id, run_id, task_id, case_id, evaluator_name,
+                passed, score, reason, expected_json, actual_text, created_at
+            FROM eval_results
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    return {"results": [dict(row) for row in rows]}
+
+
 def _get_active_model(model_name: str) -> sqlite3.Row | None:
     with get_connection() as conn:
         return conn.execute(
@@ -422,3 +517,45 @@ def _failed_response(request_id: str, error_type: str, message: str) -> dict:
         "status": "failed",
         "error": {"type": error_type, "message": message},
     }
+
+
+def _get_eval_run_for_user(run_id: str, user_id: str) -> dict:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id AS run_id, user_id, name, provider, model, case_file,
+                concurrency, timeout_ms, retry_count, status, total_cases,
+                success_count, failed_count, timeout_count, eval_pass_count,
+                eval_fail_count, started_at, finished_at, created_at
+            FROM eval_runs
+            WHERE id = ? AND user_id = ?
+            """,
+            (run_id, user_id),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Eval run not found")
+    return dict(row)
+
+
+def _normalize_provider_metrics(result: object) -> None:
+    input_tokens = _non_negative_int(getattr(result, "input_tokens", 0))
+    output_tokens = _non_negative_int(getattr(result, "output_tokens", 0))
+    total_tokens = _non_negative_int(getattr(result, "total_tokens", 0))
+    if total_tokens < input_tokens + output_tokens:
+        total_tokens = input_tokens + output_tokens
+
+    setattr(result, "input_tokens", input_tokens)
+    setattr(result, "output_tokens", output_tokens)
+    setattr(result, "total_tokens", total_tokens)
+    setattr(
+        result,
+        "tokens_per_second",
+        max(0.0, float(getattr(result, "tokens_per_second", 0) or 0)),
+    )
+
+
+def _non_negative_int(value: int | None) -> int:
+    if value is None:
+        return 0
+    return max(0, int(value))

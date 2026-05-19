@@ -247,9 +247,25 @@ uv run uvicorn backend.app.main:app --reload</code></pre>
       <h2>3. 启动后访问</h2>
       <ul>
         <li>Web UI: <a href="/">http://127.0.0.1:8000/</a></li>
+        <li>项目文档: <a href="/docs">http://127.0.0.1:8000/docs</a></li>
         <li>部署文档: <a href="/deployment">http://127.0.0.1:8000/deployment</a></li>
         <li>Swagger API: <a href="/api/docs">http://127.0.0.1:8000/api/docs</a></li>
       </ul>
+    </section>
+
+    <section>
+      <h2>4. 验收命令</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>初始化与测试</h3>
+          <pre><code>python3 scripts/init_db.py
+uv run pytest -q</code></pre>
+        </div>
+        <div class="card">
+          <h3>启动服务</h3>
+          <pre><code>uv run uvicorn backend.app.main:app --reload</code></pre>
+        </div>
+      </div>
     </section>
   </main>
   <script>

@@ -381,6 +381,53 @@
           </table>
         </div>
       </section>
+
+      <section>
+        <h2>批量评测</h2>
+        <div class="actions">
+          <button id="loadEvalRunsBtn" class="secondary">刷新 Eval Runs</button>
+        </div>
+        <div class="grid">
+          <label>
+            Case File
+            <input id="evalCaseFile" value="eval_cases/smoke_cases.jsonl">
+          </label>
+          <label>
+            Concurrency
+            <input id="evalConcurrency" type="number" value="2" min="1" max="32">
+          </label>
+        </div>
+        <div class="grid">
+          <label>
+            Timeout ms
+            <input id="evalTimeoutMs" type="number" value="60000" min="1">
+          </label>
+          <label>
+            Retry Count
+            <input id="evalRetryCount" type="number" value="1" min="0" max="10">
+          </label>
+        </div>
+        <div class="actions">
+          <button id="runEvalBtn">运行 Eval</button>
+        </div>
+        <div id="evalStatus" class="status"></div>
+        <div id="evalResult" class="result"></div>
+        <div style="overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Status</th>
+                <th>Model</th>
+                <th>Total</th>
+                <th>Pass</th>
+                <th>Fail</th>
+              </tr>
+            </thead>
+            <tbody id="evalRunsBody"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </main>
 
@@ -555,6 +602,59 @@
         setStatus("logsStatus", err.message, "error");
       }
     });
+
+    $("runEvalBtn").addEventListener("click", async () => {
+      syncTokens();
+      $("evalResult").textContent = "";
+      setStatus("evalStatus", "请求中...");
+      try {
+        const body = await request("/api/eval/runs", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${state.accessToken}` },
+          body: JSON.stringify({
+            name: "web-smoke-eval",
+            model: $("model").value,
+            case_file: $("evalCaseFile").value.trim(),
+            concurrency: Number($("evalConcurrency").value),
+            timeout_ms: Number($("evalTimeoutMs").value),
+            retry_count: Number($("evalRetryCount").value)
+          })
+        });
+        $("evalResult").textContent = JSON.stringify(body, null, 2);
+        setStatus("evalStatus", `完成: ${body.run_id}`, "success");
+        await loadEvalRuns();
+      } catch (err) {
+        setStatus("evalStatus", err.message, "error");
+      }
+    });
+
+    $("loadEvalRunsBtn").addEventListener("click", loadEvalRuns);
+
+    async function loadEvalRuns() {
+      syncTokens();
+      try {
+        const body = await request("/api/eval/runs", {
+          headers: { Authorization: `Bearer ${state.accessToken}` }
+        });
+        const tbody = $("evalRunsBody");
+        tbody.innerHTML = "";
+        body.runs.forEach((item) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="nowrap">${item.run_id}</td>
+            <td>${item.status}</td>
+            <td>${item.model}</td>
+            <td>${item.total_cases}</td>
+            <td>${item.eval_pass_count}</td>
+            <td>${item.eval_fail_count}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+        setStatus("evalStatus", `已加载 ${body.runs.length} 个 Eval Run`, "success");
+      } catch (err) {
+        setStatus("evalStatus", err.message, "error");
+      }
+    }
 
     function escapeHtml(value) {
       return value

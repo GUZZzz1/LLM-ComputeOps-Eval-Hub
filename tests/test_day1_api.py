@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -124,6 +125,9 @@ def test_day1_success_flow_and_log_isolation(
         assert key_row is not None
         assert key_row["api_key_hash"] != user["api_key"]
         assert len(key_row["api_key_hash"]) == 64
+        assert key_row["api_key_hash"] != hashlib.sha256(
+            user["api_key"].encode()
+        ).hexdigest()
 
         log_row = conn.execute(
             "SELECT status, user_id, api_key_id, metadata_json FROM request_logs WHERE id = ?",
@@ -212,6 +216,103 @@ def test_auth_and_validation_boundaries(client: TestClient) -> None:
         ).status_code
         == 422
     )
+    assert (
+        client.post(
+            "/v1/chat/completions",
+            headers=bearer(user["api_key"]),
+            json={"model": "qwen2.5:1.5b", "messages": []},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/v1/chat/completions",
+            headers=bearer(user["api_key"]),
+            json={
+                "model": "qwen2.5:1.5b",
+                "messages": [{"role": "tool", "content": "hello"}],
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/v1/chat/completions",
+            headers=bearer(user["api_key"]),
+            json={
+                "model": "qwen2.5:1.5b",
+                "messages": [{"role": "user", "content": ""}],
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/auth/register",
+            json={"username": "short_password", "password": "12345"},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/auth/register",
+            json={"username": "   ", "password": "123456"},
+        ).status_code
+        == 422
+    )
+
+
+def test_validation_failures_are_logged(client: TestClient) -> None:
+    user = register_login_create_key(client, "validation_logs")
+
+    stream_response = client.post(
+        "/v1/chat/completions",
+        headers=bearer(user["api_key"]),
+        json={
+            "model": "qwen2.5:1.5b",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": True,
+            "metadata": {"source": "stream_test"},
+        },
+    )
+    assert stream_response.status_code == 400
+    stream_body = stream_response.json()
+    assert stream_body["error"]["type"] == "validation_error"
+
+    missing_model_response = client.post(
+        "/v1/chat/completions",
+        headers=bearer(user["api_key"]),
+        json={
+            "model": "missing-model",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": False,
+            "metadata": {"source": "missing_model_test"},
+        },
+    )
+    assert missing_model_response.status_code == 400
+    missing_model_body = missing_model_response.json()
+    assert missing_model_body["error"]["type"] == "validation_error"
+
+    with sqlite3.connect(get_db_path()) as conn:
+        conn.row_factory = sqlite3.Row
+        stream_row = conn.execute(
+            "SELECT status, error_type, metadata_json FROM request_logs WHERE id = ?",
+            (stream_body["request_id"],),
+        ).fetchone()
+        missing_model_row = conn.execute(
+            "SELECT status, error_type, metadata_json FROM request_logs WHERE id = ?",
+            (missing_model_body["request_id"],),
+        ).fetchone()
+
+    assert stream_row is not None
+    assert stream_row["status"] == "failed"
+    assert stream_row["error_type"] == "validation_error"
+    assert '"source": "stream_test"' in stream_row["metadata_json"]
+
+    assert missing_model_row is not None
+    assert missing_model_row["status"] == "failed"
+    assert missing_model_row["error_type"] == "validation_error"
+    assert '"source": "missing_model_test"' in missing_model_row["metadata_json"]
 
 
 def register_login_create_key(client: TestClient, username: str) -> dict[str, str]:

@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 data/*.db
+runs/
 node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo

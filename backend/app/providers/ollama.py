@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 import httpx
+from json import JSONDecodeError
 
 from backend.app.config import settings
 from backend.app.providers.base import ProviderResponse
@@ -52,7 +53,21 @@ class OllamaProvider:
                     error_message=f"Ollama returned HTTP {response.status_code}: {response.text}",
                 )
 
-            raw = response.json()
+            try:
+                raw = response.json()
+            except JSONDecodeError as exc:
+                return ProviderResponse(
+                    content=None,
+                    raw_response=None,
+                    e2e_latency_ms=elapsed_ms,
+                    input_tokens=input_tokens,
+                    output_tokens=0,
+                    total_tokens=input_tokens,
+                    tokens_per_second=0,
+                    error_type="provider_error",
+                    error_message=f"Ollama returned invalid JSON: {exc}",
+                )
+
             content = (raw.get("message") or {}).get("content") or ""
             output_tokens = max(0, len(content) // 2)
             total_tokens = input_tokens + output_tokens

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import time
 import uuid
@@ -55,7 +56,8 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def hash_api_key(api_key: str) -> str:
-    return hashlib.sha256(api_key.encode()).hexdigest()
+    pepper = os.getenv("API_KEY_PEPPER") or settings.jwt_secret or "dev-api-key-pepper"
+    return hmac.new(pepper.encode(), api_key.encode(), hashlib.sha256).hexdigest()
 
 
 def generate_api_key() -> str:
